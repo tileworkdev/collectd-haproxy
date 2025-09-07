@@ -8,7 +8,6 @@ import socket
 
 SOCKET_BUFFER_SIZE = 1024
 
-
 class HAProxySocket(object):
     """
     Class used for interacting with an HAProxy control socket.
@@ -18,7 +17,7 @@ class HAProxySocket(object):
     proxies/servers.
     """
 
-    def __init__(self, collectd, socket_file_path):
+    def __init__(self, collectd, socket_file_path, tcp_endpoint):
         """
         The HAProxySocket constructor.
 
@@ -33,6 +32,21 @@ class HAProxySocket(object):
         """
         self.collectd = collectd
         self.socket_file_path = socket_file_path
+        self.tcp_endpoint = tcp_endpoint
+
+
+    def _get_socket(self):
+        if self.socket_file_path:
+            self.collectd.debug("Connecting to UNIX socket %s" % self.socket_file_path)
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(self.socket_file_path)
+        else:
+            self.collectd.debug("Connecting to TCP endpoint %s" % self.tcp_endpoint)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            host, port = self.tcp_endpoint.split(":")
+            sock.connect((host, port))
+
+        return sock
 
     def send_command(self, command):
         """
@@ -44,10 +58,8 @@ class HAProxySocket(object):
         :param command: The command to send, e.g. "show stat"
         :type command: str
         """
-        self.collectd.debug("Connecting to socket %s" % self.socket_file_path)
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            sock.connect(self.socket_file_path)
+            sock = self._get_socket()
         except IOError as e:
             if e.errno == errno.ECONNREFUSED:
                 self.collectd.error("Connection refused.  Is HAProxy running?")

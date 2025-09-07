@@ -27,6 +27,7 @@ class HAProxyPlugin(object):
         self.collectd = collectd
 
         self.socket_file_path = None
+        self.tcp_endpoint = None
 
         self.include_info = True
         self.include_stats = True
@@ -70,6 +71,8 @@ class HAProxyPlugin(object):
         for node in config.children:
             if node.key == "Socket":
                 self.socket_file_path = node.values[0]
+            elif node.key == "Endpoint":
+                self.tcp_endpoint = node.values[0]
             elif node.key == "IncludeInfo":
                 self.include_info = bool(node.values[0])
             elif node.key == "IncludeStats":
@@ -83,8 +86,8 @@ class HAProxyPlugin(object):
             else:
                 self.collectd.warn("Unknown config option: '%s'" % node.key)
 
-        if not self.socket_file_path:
-            self.collectd.error("No HAProxy socket path configured!")
+        if not self.socket_file_path and not self.tcp_endpoint:
+            self.collectd.error("No HAProxy socket path or tcp endpoint configured!")
             self.collectd.unregister_init(self.initialize)
             self.collectd.unregister_read(self.read)
 
@@ -106,9 +109,13 @@ class HAProxyPlugin(object):
                 plugin=self.name, type=xref[1], type_instance=xref[0]
             )
 
-        self.socket = HAProxySocket(self.collectd, self.socket_file_path)
+        self.socket = HAProxySocket(self.collectd, self.socket_file_path, self.tcp_endpoint)
 
-        self.collectd.info("Using socket path '%s'" % self.socket_file_path)
+        if self.socket_file_path:
+            self.collectd.info("Using socket path '%s'" % self.socket_file_path)
+        else:
+            self.collectd.info("Using tcp endpoint '%s'" % self.tcp_endpoint)
+
 
     def read(self):
         """
